@@ -173,6 +173,7 @@ class NovaApp:
         self.net_time = None
         self.current_page = None
         self.ram_auto = True
+        self.startup_tree = None
         self._style()
         self._layout()
         self.show_page("overview")
@@ -211,6 +212,7 @@ class NovaApp:
             ("memory", "مدير الذاكرة RAM"),
             ("dns", "مدير DNS"),
             ("programs", "البرامج"),
+            ("startup", "برامج الابتداء"),
             ("network", "الشبكة"),
             ("notes", "الملاحظات"),
         ]
@@ -257,6 +259,8 @@ class NovaApp:
             self.page_dns()
         elif page == "programs":
             self.page_programs()
+        elif page == "startup":
+            self.page_startup()
         elif page == "network":
             self.page_network()
         elif page == "notes":
@@ -757,11 +761,131 @@ class NovaApp:
 
         tk.Button(self.content, text="حفظ", command=save, bg=PURPLE, fg="white", relief="flat", padx=18, pady=9).pack(anchor="e", pady=8)
 
-    def _need_psutil(self):
-        tk.Label(self.content, text="مكتبة psutil غير مثبتة. شغّل run_nova.bat لتثبيتها تلقائيًا.",
-                 bg=BG, fg=ORANGE, font=("Segoe UI", 11)).pack(anchor="e", pady=20)
+    def page_startup(self):
+        self.heading("برامج الابتداء", "البرامج التي تبدأ تلقائيًا عند التشغيل")
+        box = tk.Frame(self.content, bg=PANEL, padx=20, pady=16)
+        box.pack(fill="x", pady=(0, 14))
+        tk.Label(box, text="برامج الابتداء", bg=PANEL, fg=TEXT, font=("Segoe UI", 13, "bold")).pack(anchor="e", pady=(0, 6))
+        tk.Label(box, text="البرامج التي تبدأ تلقائيًا عند تشغيل ويندوز.", bg=PANEL, fg=MUTED,
+                 font=("Segoe UI", 10), wraplength=740, justify="right").pack(anchor="e", pady=(0, 10))
 
-    def refresh_stats(self):
+        cols = ("name", "path", "enabled")
+        self.startup_tree = ttk.Treeview(self.content, columns=cols, show="headings", height=12)
+        for col, title, width in [("name", "اسم البرنامج", 340), ("path", "المسار", 200), ("enabled", "مفعول", 80)]:
+            self.startup_tree.heading(col, text=title)
+            self.startup_tree.column(col, width=width, anchor="center")
+        self.startup_tree.pack(fill="both", expand=True, pady=(0, 10))
+
+        dbtn = tk.Frame(box, bg=PANEL)
+        dbtn.pack(anchor="e", pady=(0, 8))
+        tk.Button(dbtn, text="تحديث القائمة", command=self._refresh_startup, bg=PANEL2, fg=TEXT,
+                  relief="flat", padx=14, pady=7).pack(side="right", padx=4)
+        tk.Button(dbtn, text="إعدادات التطبيقات", command=lambda: os.startfile("ms-settings:appsfeatures"), bg=PANEL2, fg=TEXT,
+                  relief="flat", padx=14, pady=8).pack(side="right", padx=4)
+
+        self._populate_startup_processes()
+        self._schedule_startup_refresh()
+
+    def fetch_startup_entries(self):
+        """Return list of dicts {name, path, enabled}."""
+        entries = []
+        local = Path(os.environ.get("LOCALAPPDATA", str(Path.home())))
+        temp = Path(tempfile.gettempdir())
+        targets = cache_targets()
+        found_paths = set()
+        for name, path in cache_targets():
+            thumb = "الصور المصغرة" in name
+            if path.exists():
+                if path.is_dir():
+                    first_file = next((p for p in path.iterdir() if p.is_file()), None)
+                    if first_file:
+                        entries.append({"name": first_file.name, "path": str(first_file), "enabled": False})
+                else:
+                    entries.append({"name": name, "path": str(path), "enabled": False})
+        # Registry fallback
+        reg_key = r"Software\Microsoft\Windows\Startup"
+        try:
+            import winreg
+            keys = {}
+            try:
+                hkey = winreg.OpenKey(r"HKEY_CURRENT_USER", reg_key)
+                for i in range(winreg.QueryInfoKeys(hkey)):
+                    fval, _ = winreg.QueryValueEx(hkey, i)
+                    if fval and "=" in fval:
+                        parts = fval.split("=")
+                        name = parts[0].strip().split("/")[0]
+                        value = parts[1].strip()
+                        keys[name] = value
+                winreg.CloseKey(hkey)
+            except Exception:
+                pass
+            for name, value in keys.items():
+                if name not in found_paths:
+                    entries.append({"name": name, "path": value, "enabled": bool(value.strip()) if isinstance(value, str) else True})
+        except Exception:
+            pass
+        return entries
+
+    def _toggle_startup(self, idx, val):
+        item = self.startup_tree.item(idx, "selected") if self.current_page == "startup" else None
+        if item is None:
+            messagebox.showinfo("NOVA", "اختر عنصرًا واحدًا من قائمة البرامج الابتدائية.")
+            return
+        current_enabled = item.get("enabled", False)
+        new_enabled = val
+        if current_enabled != new_enabled:
+            item['values'][2] = str(new_enabled)
+            self.root.after(0, lambda: self.startup_tree.reindex())
+        else:
+            self.startup_tree.move(item, "", 0)
+        sel = self.startup_tree.selection()
+        if sel:
+            self.dns_reset_btn.config(state="normal")
+        self.root.after(0, lambda: self.status.config(text="● جاهز", fg=GREEN))
+
+    def _schedule_startup_refresh(self):
+        if self.current_page == "startup" and self.ram_auto:
+            self.root.after(5000, self._refresh_startup_now)
+
+    def _refresh_startup_now(self):
+        if not psutil or self.current_page != "startup":
+            return
+        entries = self.fetch_startup_entries()
+        for e in entries:
+            row = tk.Frame(self.content, bg=BG)
+            row.pack(fill="x", pady=5)
+            c = tk.Checkbutton(row, text=f"{e['name']} — {e['path']}", variable=e['enabled'],
+                               bg=PANEL, fg=TEXT, selectcolor=PANEL2, activebackground=PANEL, activeforeground=TEXT,
+                               font=("Segoe UI", 10)).pack(anchor="e")
+            tk.Button(row, text="تشغيل المحدد", command=lambda p=e['path']: self.open_selected(p),
+                      bg=PURPLE, fg="white", relief="flat", padx=14, pady=7).pack(side="left", fill="x", expand=True)
+        self.root.after(3000, self.refresh_startup_now)
+
+    def open_selected(self, path):
+        # Launch selected program
+        if path and os.path.exists(path):
+            try:
+                os.startfile(path)
+            except Exception as e:
+                messagebox.showerror("NOVA", str(e))
+
+    def refresh_startup(self):
+        if not psutil or self.current_page != "startup":
+            return
+        entries = self.fetch_startup_entries()
+        for e in entries:
+            row = tk.Frame(self.content, bg=BG)
+            row.pack(fill="x", pady=5)
+            c = tk.Checkbutton(row, text=f"{e['name']} — {e['path']}", variable=e['enabled'],
+                               bg=PANEL, fg=TEXT, selectcolor=PANEL2, activebackground=PANEL, activeforeground=TEXT,
+                               font=("Segoe UI", 10)).pack(anchor="e")
+            tk.Button(row, text="تشغيل المحدد", command=lambda p=e['path']: self.open_selected(p),
+                      bg=PURPLE, fg="white", relief="flat", padx=14, pady=7).pack(side="left", fill="x", expand=True)
+        self.root.after(3000, self.refresh_startup_now)
+
+    # ==================== EXISTING PAGES ====================
+    
+    def page_programs(self):
         if psutil:
             psutil.cpu_percent(interval=None)
         self.root.after(3000, self.refresh_stats)
