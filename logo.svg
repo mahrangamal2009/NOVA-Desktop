@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9b72ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#653f75;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="#0b0b12"/>
+
+  <!-- Feather / Quill -->
+  <path d="M 520 720 
+           Q 560 560, 620 420 
+           Q 700 280, 720 120 
+           Q 740 60, 640 100 
+           Q 580 120, 560 240 
+           Q 540 340, 500 460 
+           Q 460 560, 480 680 
+           Q 500 780, 520 720 Z" 
+        fill="url(#grad1)" filter="url(#glow)" stroke="#ffffff" stroke-width="2"/>
+
+  <!-- Feather stem -->
+  <path d="M 520 720 Q 600 600, 720 120" fill="none" stroke="#ffffff" stroke-width="3" opacity="0.6"/>
+
+  <!-- Text: NOVA -->
+  <text x="512" y="620" font-family="Segoe UI, Arial, sans-serif" font-size="180" font-weight="bold" 
+        fill="#ffffff" text-anchor="middle" filter="url(#glow)">NOVA</text>
+
+  <!-- Text: Desktop -->
+  <text x="512" y="790" font-family="Segoe UI, Arial, sans-serif" font-size="70" 
+        fill="#cccccc" text-anchor="middle">Desktop</text>
+
+  <!-- Text: 3.0 -->
+  <text x="700" y="790" font-family="Segoe UI, Arial, sans-serif" font-size="70" font-weight="bold" 
+        fill="#9b72ff" text-anchor="middle">3.0</text>
+
+  <!-- Accent lines -->
+  <line x1="280" y1="790" x2="440" y2="790" stroke="#9b72ff" stroke-width="3" opacity="0.8"/>
+  <line x1="584" y1="790" x2="744" y2="790" stroke="#9b72ff" stroke-width="3" opacity="0.8"/>
+</svg>
