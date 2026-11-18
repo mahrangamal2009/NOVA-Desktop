@@ -179,6 +179,11 @@ class NovaApp:
         self.show_page("overview")
         self.refresh_stats()
 
+    def refresh_stats(self):
+        if psutil:
+            psutil.cpu_percent(interval=None)
+        # No further scheduling needed; called during init.
+
     def _style(self):
         style = ttk.Style()
         try:
@@ -891,10 +896,15 @@ class NovaApp:
         self.root.after(3000, self.refresh_stats)
 
 
-def main():
-    root = tk.Tk()
-    app = NovaApp(root)
-    root.mainloop()
+    def refresh_stats(self):
+        if psutil:
+            psutil.cpu_percent(interval=None)
+        self.root.after(3000, self.refresh_stats)
+
+    def main():
+        root = tk.Tk()
+        app = NovaApp(root)
+        root.mainloop()
 
 
 if __name__ == "__main__":
